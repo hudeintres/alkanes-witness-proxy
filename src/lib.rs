@@ -1,4 +1,7 @@
+use std::sync::Arc;
+
 use alkanes_runtime::runtime::AlkaneResponder;
+use alkanes_runtime::storage::StoragePointer;
 use alkanes_runtime::{auth::AuthenticatedResponder, declare_alkane, message::MessageDispatch};
 #[allow(unused_imports)]
 use alkanes_runtime::{
@@ -9,16 +12,43 @@ use alkanes_std_factory_support::MintableToken;
 use alkanes_support::{context::Context, parcel::AlkaneTransfer, response::CallResponse};
 use anyhow::{anyhow, Result};
 use metashrew_support::compat::{to_arraybuffer_layout, to_passback_ptr};
+use metashrew_support::index_pointer::KeyValuePointer;
+
+pub const BUSD_DEPLOYMENT_ID: u128 = 0xb05d;
+
+#[cfg(test)]
+pub mod tests;
+#[derive(Default)]
+pub struct RedeemInfo {
+    pub token_id: u128,               // target usdc or usdt
+    pub destination_chain_id: u128,   // target chain
+    pub destination_address_h1: u128, // first 16 bytes of evm address
+    pub destination_address_h2: u128, // last 4 bytes of evm address,
+}
+
+impl RedeemInfo {
+    pub fn try_to_vec(&self) -> Vec<u8> {
+        let mut bytes = Vec::new();
+
+        // reserves and total_supply: 16 bytes each
+        bytes.extend_from_slice(&self.token_id.to_le_bytes());
+        bytes.extend_from_slice(&self.destination_chain_id.to_le_bytes());
+        bytes.extend_from_slice(&self.destination_address_h1.to_le_bytes());
+        bytes.extend_from_slice(&self.destination_address_h2.to_le_bytes());
+
+        bytes
+    }
+}
 
 #[derive(Default)]
-pub struct OwnedToken(());
+pub struct bUSD(());
 
-impl MintableToken for OwnedToken {}
+impl MintableToken for bUSD {}
 
-impl AuthenticatedResponder for OwnedToken {}
+impl AuthenticatedResponder for bUSD {}
 
 #[derive(MessageDispatch)]
-enum OwnedTokenMessage {
+enum bUSDMessage {
     #[opcode(0)]
     Initialize {
         auth_token_units: u128,
@@ -56,12 +86,43 @@ enum OwnedTokenMessage {
     #[returns(u128)]
     GetTotalSupply,
 
+    // Get redeem info by index
+    // Redeem data returns { tx id, redeem's params }
+    #[opcode(102)]
+    #[returns(Vec<u8>)]
+    GetRedeemInfoByIndex { index: u128 },
+
+    /// Get the total redeem count
+    #[opcode(103)]
+    #[returns(u128)]
+    GetTotalRedeemCount {},
+
     #[opcode(1000)]
     #[returns(Vec<u8>)]
     GetData,
 }
 
-impl OwnedToken {
+impl bUSD {
+    fn redeem_ptr(&self, index: u128) -> StoragePointer {
+        StoragePointer::from_keyword("/redeem/").select_value::<u128>(index)
+    }
+    fn set_redeem_info(&self, index: u128, redeem_info: RedeemInfo) {
+        self.redeem_ptr(index)
+            .set(Arc::new(redeem_info.try_to_vec()));
+    }
+    fn redeem_count_ptr(&self) -> StoragePointer {
+        StoragePointer::from_keyword("/redeem_count")
+    }
+    fn get_redeem_count(&self) -> u128 {
+        self.redeem_count_ptr().get_value::<u128>()
+    }
+    fn set_redeem_count(&self, v: u128) {
+        self.redeem_count_ptr().set_value::<u128>(v);
+    }
+    fn increment_redeem_count(&self) {
+        let current = self.get_redeem_count();
+        self.set_redeem_count(current + 1);
+    }
     fn initialize(&self, auth_token_units: u128, token_units: u128) -> Result<CallResponse> {
         self.initialize_with_name_symbol(
             auth_token_units,
@@ -89,10 +150,11 @@ impl OwnedToken {
             .0
             .push(self.deploy_auth_token(auth_token_units)?);
 
-        response.alkanes.0.push(AlkaneTransfer {
-            id: context.myself.clone(),
-            value: token_units,
-        });
+        response
+            .alkanes
+            .pay(<Self as MintableToken>::mint(self, &context, token_units)?);
+
+        self.set_redeem_count(0);
 
         Ok(response)
     }
@@ -105,7 +167,7 @@ impl OwnedToken {
 
         // Call the mint method from the MintableToken trait
         let transfer = <Self as MintableToken>::mint(self, &context, token_units)?;
-        response.alkanes.0.push(transfer);
+        response.alkanes.pay(transfer);
 
         Ok(response)
     }
@@ -127,6 +189,17 @@ impl OwnedToken {
 
         self.decrease_total_supply(context.incoming_alkanes.0[0].value)?;
 
+        let curr_index = self.get_redeem_count();
+        let redeem_info = RedeemInfo {
+            token_id: token_id,
+            destination_chain_id: destination_chain_id,
+            destination_address_h1: destination_address_h1,
+            destination_address_h2: destination_address_h2,
+        };
+        self.set_redeem_info(curr_index, redeem_info);
+
+        self.increment_redeem_count();
+
         Ok(CallResponse::default())
     }
 
@@ -144,6 +217,24 @@ impl OwnedToken {
         let mut response: CallResponse = CallResponse::forward(&context.incoming_alkanes.clone());
 
         response.data = self.symbol().into_bytes().to_vec();
+
+        Ok(response)
+    }
+
+    fn get_redeem_info_by_index(&self, index: u128) -> Result<CallResponse> {
+        let context = self.context()?;
+        let mut response: CallResponse = CallResponse::forward(&context.incoming_alkanes.clone());
+
+        response.data = self.redeem_ptr(index).get().to_vec();
+
+        Ok(response)
+    }
+
+    fn get_total_redeem_count(&self) -> Result<CallResponse> {
+        let context = self.context()?;
+        let mut response: CallResponse = CallResponse::forward(&context.incoming_alkanes.clone());
+
+        response.data = self.get_redeem_count().to_le_bytes().to_vec();
 
         Ok(response)
     }
@@ -167,11 +258,11 @@ impl OwnedToken {
     }
 }
 
-impl AlkaneResponder for OwnedToken {}
+impl AlkaneResponder for bUSD {}
 
 // Use the new macro format
 declare_alkane! {
-    impl AlkaneResponder for OwnedToken {
-        type Message = OwnedTokenMessage;
+    impl AlkaneResponder for bUSD {
+        type Message = bUSDMessage;
     }
 }
