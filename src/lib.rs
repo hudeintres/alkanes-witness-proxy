@@ -20,6 +20,7 @@ pub const BUSD_DEPLOYMENT_ID: u128 = 0xb05d;
 pub mod tests;
 #[derive(Default)]
 pub struct RedeemInfo {
+    pub amount: u128,
     pub token_id: u128,               // target usdc or usdt
     pub destination_chain_id: u128,   // target chain
     pub destination_address_h1: u128, // first 16 bytes of evm address
@@ -30,7 +31,7 @@ impl RedeemInfo {
     pub fn try_to_vec(&self) -> Vec<u8> {
         let mut bytes = Vec::new();
 
-        // reserves and total_supply: 16 bytes each
+        bytes.extend_from_slice(&self.amount.to_le_bytes());
         bytes.extend_from_slice(&self.token_id.to_le_bytes());
         bytes.extend_from_slice(&self.destination_chain_id.to_le_bytes());
         bytes.extend_from_slice(&self.destination_address_h1.to_le_bytes());
@@ -191,6 +192,7 @@ impl bUSD {
 
         let curr_index = self.get_redeem_count();
         let redeem_info = RedeemInfo {
+            amount: context.incoming_alkanes.0[0].value,
             token_id: token_id,
             destination_chain_id: destination_chain_id,
             destination_address_h1: destination_address_h1,

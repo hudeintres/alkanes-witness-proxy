@@ -352,10 +352,11 @@ fn test_busd_redeem() -> Result<()> {
             TraceEvent::ReturnContext(trace_response) => {
                 // Now we have the TraceResponse, access the data field
                 let data = &trace_response.inner.data;
-                assert_eq!(data[0], 1);
-                assert_eq!(data[16], 2);
-                assert_eq!(data[32], 3);
-                assert_eq!(data[48], 4);
+                assert_eq!(data[0], 100);
+                assert_eq!(data[16], 1);
+                assert_eq!(data[32], 2);
+                assert_eq!(data[48], 3);
+                assert_eq!(data[64], 4);
             }
             _ => panic!("Expected ReturnContext variant, but got a different variant"),
         }
