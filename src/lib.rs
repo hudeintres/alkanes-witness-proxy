@@ -11,20 +11,24 @@ use alkanes_runtime::{
 use alkanes_std_factory_support::MintableToken;
 use alkanes_support::{context::Context, parcel::AlkaneTransfer, response::CallResponse};
 use anyhow::{anyhow, Result};
+use bitcoin::hashes::Hash;
+use bitcoin::{Transaction, Txid};
 use metashrew_support::compat::{to_arraybuffer_layout, to_passback_ptr};
 use metashrew_support::index_pointer::KeyValuePointer;
+use metashrew_support::utils::consensus_decode;
 
 pub const BUSD_DEPLOYMENT_ID: u128 = 0xb05d;
 
 #[cfg(test)]
 pub mod tests;
-#[derive(Default)]
+
 pub struct RedeemInfo {
     pub amount: u128,
     pub token_id: u128,               // target usdc or usdt
     pub destination_chain_id: u128,   // target chain
     pub destination_address_h1: u128, // first 16 bytes of evm address
     pub destination_address_h2: u128, // last 4 bytes of evm address,
+    pub txid: Txid,
 }
 
 impl RedeemInfo {
@@ -36,6 +40,7 @@ impl RedeemInfo {
         bytes.extend_from_slice(&self.destination_chain_id.to_le_bytes());
         bytes.extend_from_slice(&self.destination_address_h1.to_le_bytes());
         bytes.extend_from_slice(&self.destination_address_h2.to_le_bytes());
+        bytes.extend_from_slice(&self.txid.as_byte_array().to_vec());
 
         bytes
     }
@@ -191,12 +196,14 @@ impl bUSD {
         self.decrease_total_supply(context.incoming_alkanes.0[0].value)?;
 
         let curr_index = self.get_redeem_count();
+        let tx = consensus_decode::<Transaction>(&mut std::io::Cursor::new(self.transaction()))?;
         let redeem_info = RedeemInfo {
             amount: context.incoming_alkanes.0[0].value,
             token_id: token_id,
             destination_chain_id: destination_chain_id,
             destination_address_h1: destination_address_h1,
             destination_address_h2: destination_address_h2,
+            txid: tx.compute_txid(),
         };
         self.set_redeem_info(curr_index, redeem_info);
 

@@ -11,6 +11,8 @@ use alkanes_support::id::AlkaneId;
 use alkanes_support::response::ExtendedCallResponse;
 use alkanes_support::trace::{Trace, TraceEvent};
 use anyhow::Result;
+use bitcoin::hashes::Hash;
+
 use bitcoin::address::NetworkChecked;
 use bitcoin::blockdata::transaction::OutPoint;
 use bitcoin::transaction::Version;
@@ -336,8 +338,9 @@ fn test_busd_redeem() -> Result<()> {
     index_block(&redeem_block, block_height)?;
 
     // Get the trace data from the transaction
+    let txid = redeem_block.txdata[redeem_block.txdata.len() - 1].compute_txid();
     let outpoint = OutPoint {
-        txid: redeem_block.txdata[redeem_block.txdata.len() - 1].compute_txid(),
+        txid: txid,
         vout: 5,
     };
 
@@ -352,6 +355,11 @@ fn test_busd_redeem() -> Result<()> {
             TraceEvent::ReturnContext(trace_response) => {
                 // Now we have the TraceResponse, access the data field
                 let data = &trace_response.inner.data;
+                println!(
+                    "expected txid {:?} \n {:?}",
+                    txid.as_byte_array().to_vec(),
+                    data
+                );
                 assert_eq!(data[0], 100);
                 assert_eq!(data[16], 1);
                 assert_eq!(data[32], 2);
