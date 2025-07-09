@@ -133,8 +133,8 @@ impl bUSD {
         self.initialize_with_name_symbol(
             auth_token_units,
             token_units,
-            String::from("OWNED"),
-            String::from("OWNED"),
+            String::from("bUSD"),
+            String::from("bUSD"),
         )
     }
 
