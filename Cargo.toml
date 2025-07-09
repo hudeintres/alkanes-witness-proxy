@@ -42,3 +42,4 @@ hex = "0.4.3"
 [features]
 default = []
 test = []
+debug-log = ["alkanes/debug-log"]

@@ -150,7 +150,7 @@ impl bUSD {
         let mut response: CallResponse = CallResponse::forward(&context.incoming_alkanes.clone());
 
         <Self as MintableToken>::set_name_and_symbol_str(self, name, symbol);
-
+        self.set_data()?;
         response
             .alkanes
             .0
