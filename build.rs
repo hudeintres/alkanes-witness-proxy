@@ -85,16 +85,8 @@ fn main() {
     // Use a separate target directory specifically for the WASM build
     // to avoid triggering the main build process again
     build_alkane(wasm_str, vec![]).unwrap();
-    let mod_name = "bUSD".to_owned();
-    eprintln!(
-        "write: {}",
-        write_dir
-            .join("std")
-            .join(mod_name.clone() + "_build.rs")
-            .into_os_string()
-            .to_str()
-            .unwrap()
-    );
+    let mod_name = "witness_proxy".to_owned();
+    eprintln!("wasm_str: {}", wasm_str);
     let f: Vec<u8> = fs::read(
         &Path::new(&wasm_str)
             .join("wasm32-unknown-unknown")

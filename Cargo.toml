@@ -1,8 +1,8 @@
 [package]
-name = "bUSD"
+name = "witness-proxy"
 version = "0.1.0"
 edition = "2021"
-description = "A modernized and secure version of the free mint alkane contract"
+description = "A proxy to call contracts using witness data (to avoid OP_RETURN > 80 bytes)"
 authors = ["Alkane Team"]
 
 [lib]
