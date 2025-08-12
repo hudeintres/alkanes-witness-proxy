@@ -1,1 +1,2 @@
-# bUSD contract
+# Witness proxy contract
+Used as a proxy to call other contracts when op return bytesizes are too large. This contract will read the witness data and use that to externally call using the data in the witness
