@@ -1,0 +1,20 @@
+[package]
+name = "witness-proxy"
+version = "0.1.0"
+edition = "2021"
+description = "A proxy to call contracts using witness data (to avoid OP_RETURN > 80 bytes)"
+authors = ["Alkane Team"]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+alkanes-support = { git = "https://github.com/kungfuflex/alkanes-rs" }
+alkanes-runtime = { git = "https://github.com/kungfuflex/alkanes-rs" }
+metashrew-support = { git = "https://github.com/sandshrewmetaprotocols/metashrew" }
+protorune-support = { git = "https://github.com/kungfuflex/alkanes-rs" }
+alkanes-std-factory-support = { git = "https://github.com/kungfuflex/alkanes-rs" }
+ordinals = { git = "https://github.com/kungfuflex/alkanes-rs" }
+anyhow = "1.0.94"
+bitcoin = { version = "0.32.4", features = ["rand"] }
+hex_lit = "0.1.1"

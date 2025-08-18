@@ -41,13 +41,7 @@ fn build_alkane(wasm_str: &str, features: Vec<&'static str>) -> Result<()> {
 }
 
 fn main() {
-    // Guard against recursive execution
-    if std::env::var("BUILD_IN_PROGRESS").is_ok() {
-        println!("Build script already running, skipping to prevent recursion");
-        return;
-    }
-    // Set flag to indicate build is in progress
-    std::env::set_var("BUILD_IN_PROGRESS", "1");
+    println!("cargo:rerun-if-changed=alkanes/");
     let env_var = env::var_os("OUT_DIR").unwrap();
     let base_dir = Path::new(&env_var)
         .parent()
@@ -79,47 +73,64 @@ fn main() {
         .parent()
         .unwrap()
         .parent()
-        .unwrap();
+        .unwrap()
+        .join("alkanes");
     std::env::set_current_dir(&crates_dir).unwrap();
-
-    // Use a separate target directory specifically for the WASM build
-    // to avoid triggering the main build process again
-    build_alkane(wasm_str, vec![]).unwrap();
-    let mod_name = "witness_proxy".to_owned();
-    eprintln!("wasm_str: {}", wasm_str);
-    let f: Vec<u8> = fs::read(
-        &Path::new(&wasm_str)
-            .join("wasm32-unknown-unknown")
-            .join("release")
-            .join(mod_name.clone() + ".wasm"),
-    )
-    .unwrap();
-    let compressed: Vec<u8> = compress(f.clone()).unwrap();
-    fs::write(
-        &Path::new(&wasm_str)
-            .join("wasm32-unknown-unknown")
-            .join("release")
-            .join(mod_name.clone() + ".wasm.gz"),
-        &compressed,
-    )
-    .unwrap();
-    let data: String = hex::encode(&f);
-    fs::write(
-                &write_dir.join("std").join(mod_name.clone() + "_build.rs"),
+    let mods = fs::read_dir(&crates_dir)
+        .unwrap()
+        .filter_map(|v| {
+            let name = v.ok()?.file_name().into_string().ok()?;
+            Some(name)
+        })
+        .collect::<Vec<String>>();
+    let files = mods
+        .clone()
+        .into_iter()
+        .filter_map(|name| Some(name))
+        .collect::<Vec<String>>();
+    files.into_iter()
+        .map(|v| -> Result<String> {
+            std::env::set_current_dir(&crates_dir.clone().join(v.clone()))?;
+            build_alkane(wasm_str, vec![])?;
+            std::env::set_current_dir(&crates_dir)?;
+            let subbed = v.clone().replace("-", "_");
+            eprintln!(
+                "write: {}",
+                write_dir
+                    .join("std")
+                    .join(subbed.clone() + "_build.rs")
+                    .into_os_string()
+                    .to_str()
+                    .unwrap()
+            );
+            let f: Vec<u8> = fs::read(
+                &Path::new(&wasm_str)
+                    .join("wasm32-unknown-unknown")
+                    .join("release")
+                    .join(subbed.clone() + ".wasm"),
+            )?;
+            let compressed: Vec<u8> = compress(f.clone())?;
+            fs::write(&Path::new(&wasm_str).join("wasm32-unknown-unknown").join("release").join(subbed.clone() + ".wasm.gz"), &compressed)?;
+            let data: String = hex::encode(&f);
+            fs::write(
+                &write_dir.join("std").join(subbed.clone() + "_build.rs"),
                 String::from("use hex_lit::hex;\n#[allow(long_running_const_eval)]\npub fn get_bytes() -> Vec<u8> { (&hex!(\"")
                     + data.as_str()
                     + "\")).to_vec() }",
-            ).unwrap();
-    eprintln!(
-        "build: {}",
-        write_dir
-            .join("std")
-            .join(mod_name.clone() + "_build.rs")
-            .into_os_string()
-            .to_str()
-            .unwrap()
-    );
-
+            )?;
+            eprintln!(
+                "build: {}",
+                write_dir
+                    .join("std")
+                    .join(subbed.clone() + "_build.rs")
+                    .into_os_string()
+                    .to_str()
+                    .unwrap()
+            );
+            Ok(subbed)
+        })
+        .collect::<Result<Vec<String>>>()
+        .unwrap();
     eprintln!(
         "write test builds to: {}",
         write_dir
@@ -131,7 +142,11 @@ fn main() {
     );
     fs::write(
         &write_dir.join("std").join("mod.rs"),
-        "pub mod ".to_owned() + mod_name.as_str() + "_build;\n",
+        mods.into_iter()
+            .map(|v| v.replace("-", "_"))
+            .fold(String::default(), |r, v| {
+                r + "pub mod " + v.as_str() + "_build;\n"
+            }),
     )
     .unwrap();
 }

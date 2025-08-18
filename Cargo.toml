@@ -1,9 +1,12 @@
 [package]
-name = "witness-proxy"
+name = "alkanes-proxies"
 version = "0.1.0"
 edition = "2021"
-description = "A proxy to call contracts using witness data (to avoid OP_RETURN > 80 bytes)"
+description = "Proxy helpers"
 authors = ["Alkane Team"]
+
+[workspace]
+members = ["alkanes/*"]
 
 [lib]
 crate-type = ["cdylib", "rlib"]
